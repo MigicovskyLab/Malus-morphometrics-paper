@@ -1,0 +1,282 @@
+---
+title: ""
+format: html
+editor: visual
+---
+
+Load R packages
+
+```{r}
+library(caret)
+library(MASS)
+library(tidyverse)
+library(reshape2)
+
+```
+
+### Figure S4
+
+Load data
+
+```{r}
+ data <- read_csv("Apple_metadata.csv")
+```
+
+Subset down to relevant data
+
+```{r}
+data <- data %>% dplyr::select(continent, x1:y39)
+```
+
+K-fold cross validation
+
+```{r}
+#####Figure S4#####
+#Count
+data %>%
+  count(continent)
+        
+set.seed(123)
+
+#Set folds for stratified cross validation using a value of k 
+folds <- createFolds(data$continent, k = 5)
+
+#Get labels 
+classes <- levels(factor(data$continent))
+
+#Make a blank confusion matrix
+cm <- matrix(0, nrow = length(classes), ncol = length(classes),
+             dimnames = list(Actual = classes, Predicted = classes))
+
+#Loop to run lda across each of the folds
+for (i in seq_along(folds)) {
+  train_data  <- data[-folds[[i]], ]
+  test_data <- data[folds[[i]], ]  
+
+
+  #Fit model
+  lda_fit <- lda(continent~x1+y1+x2+y2+x3+y3+x4+y4+x5+y5+x6+y6+x7+y7+x8+y8+x9+y9+x10+y10+x11+y11+x12+y12+x13+y13+x14+y14+x15+y15+x16+y16+x17+y17+x18+y18+x19+y19+x21+y21+x22+y22+x23+y23+x24+y24+x25+y25+x26+y26+x27+y27+x28+y28+x29+y29+x30+y30+x31+y31+x32+y32+x33+y33+x34+y34+x35+y35+x36+y36+x37+y37+x38+y38+x39+y39, data = train_data, prior = rep(1 / length(classes), length(classes)))
+
+
+  #Predict
+  y_pred <- predict(lda_fit, test_data)$class
+  y_test <- test_data$continent
+
+  #Insert predictions into confusion matrix
+  cm <- cm + table(
+    factor(y_test, levels = classes),
+    factor(y_pred, levels = classes)
+  )
+}
+
+#Get proportions for confusion matrix
+cm_normalized <- cm / rowSums(cm)
+
+#Reformat for plotting
+cm_melted <- reshape2::melt(cm_normalized)
+
+#Plot
+cm_melted %>% ggplot(aes(x = Actual, y = Predicted, fill = value)) +
+  geom_tile() +
+  scale_fill_viridis_c() +
+  labs(x = "Actual Species", y = "Predicted Species") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+cm_melted %>% ggplot(aes(Predicted, Actual, fill = value)) +
+  geom_tile() +
+    geom_text(aes(label = round(value, 3)),
+            color = "white", size = 5) +
+  scale_fill_gradient(low = "white", high = "black") +
+  theme(panel.background = element_rect(fill = "white"))+
+  labs(x = "Predicted continent", y = "Actual continent") +
+  theme_minimal() +
+  theme(panel.grid = element_blank())+
+  theme(axis.text.x = element_text(hjust = 1)) +
+  theme(axis.text = element_text(size=10) )
+
+
+#Calculate overall accuracy
+accuracy <- sum(diag(cm)) / sum(cm)
+accuracy
+
+#ggsave("FigureS4.pdf", plot=last_plot(), width=10, height=7)
+#Additional figure edits were made in Affinity
+
+```
+
+### Figure 7
+
+```{r}
+ #data <- read_csv("Apple_metadata.csv")
+
+
+data <- data %>% dplyr::select(file, genotype, ID, x1:y39)
+
+#count
+data %>%
+  count(genotype)
+
+all_predictions <- data.frame(
+  LeafID = character(),
+  ID = character(),
+  Actual = character(),
+  Predicted = character(),
+  Fold = integer(),
+  stringsAsFactors = FALSE
+)
+
+
+set.seed(123)
+
+#Set folds for stratified cross validation using a value of k 
+folds <- createFolds(data$genotype, k = 5)
+
+#Get labels  
+classes <- levels(factor(data$genotype))
+
+#Make a blank confusion matrix
+cm <- matrix(0, nrow = length(classes), ncol = length(classes),
+             dimnames = list(Actual = classes, Predicted = classes))
+
+#Loop to run lda across each of the folds
+for (i in seq_along(folds)) {
+  train_data <- data[-folds[[i]], ]
+  test_data  <- data[folds[[i]], ]
+
+    # Exclude metadata columns from predictors
+  train_fit_data <- train_data[, !(names(train_data) %in% c("file", "ID"))]
+  test_fit_data  <- test_data[, !(names(test_data) %in% c("file", "ID"))]
+  
+  
+  #Fit model
+
+  lda_fit <- lda(genotype~x1+y1+x2+y2+x3+y3+x4+y4+x5+y5+x6+y6+x7+y7+x8+y8+x9+y9+x10+y10+x11+y11+x12+y12+x13+y13+x14+y14+x15+y15+x16+y16+x17+y17+x18+y18+x19+y19+x21+y21+x22+y22+x23+y23+x24+y24+x25+y25+x26+y26+x27+y27+x28+y28+x29+y29+x30+y30+x31+y31+x32+y32+x33+y33+x34+y34+x35+y35+x36+y36+x37+y37+x38+y38+x39+y39, data = train_fit_data, prior = rep(1 / length(classes), length(classes)))
+
+  #Predict
+  y_pred <- predict(lda_fit, test_data)$class
+  y_test <- test_data$genotype
+  
+  #Insert predictions into confusion matrix
+  cm <- cm + table(
+    factor(y_test, levels = classes),
+    factor(y_pred, levels = classes)
+  )
+  
+  all_predictions <- rbind(
+    all_predictions,
+    data.frame(
+      LeafID = test_data$file,
+      ID = test_data$ID,
+      Actual = test_data$genotype,
+      Predicted = y_pred,
+      Fold = i,
+      stringsAsFactors = FALSE
+    )
+  )
+  
+}
+
+
+#Get proportions for confusion matrix
+cm_normalized <- cm / rowSums(cm)
+
+#Reformat for plotting
+cm_melted <- reshape2::melt(cm_normalized)
+
+#Plot
+cm_melted %>% ggplot(aes(x = Actual, y = Predicted, fill = value)) +
+  geom_tile() +
+  scale_fill_viridis_c() +
+  labs(x = "Actual continent", y = "Predicted continent") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+#Reordering for desired order
+cm_melted$Actual <- factor(cm_melted$Actual, levels =c("Malus angustifolia", "Malus coronaria", "Malus ioensis","Malus fusca", 
+                                                       "Malus baccata",
+                                                       "Malus domestica",
+                                                       "Malus floribunda",
+                                                       "Malus halliana",
+                                                       "Malus hupehensis",
+                                                       "Malus kansuensis",
+                                                       "Malus prunifolia",
+                                                       "Malus x robusta",
+                                                       "Malus sargentii",
+                                                       "Malus sieversii",
+                                                       "Malus sikkimensis",
+                                                       "Malus toringo",
+                                                       "Malus toringoides",
+                                                       "Malus transitoria"))
+cm_melted$Predicted <- factor(cm_melted$Predicted,levels=c("Malus angustifolia", "Malus coronaria", "Malus ioensis","Malus fusca", 
+                                                           "Malus baccata",
+                                                           "Malus domestica",
+                                                           "Malus floribunda",
+                                                           "Malus halliana",
+                                                           "Malus hupehensis",
+                                                           "Malus kansuensis",
+                                                           "Malus prunifolia",
+                                                           "Malus x robusta",
+                                                           "Malus sargentii",
+                                                           "Malus sieversii",
+                                                           "Malus sikkimensis",
+                                                           "Malus toringo",
+                                                           "Malus toringoides",
+                                                           "Malus transitoria"))
+
+cm_melted %>% ggplot(aes(Predicted, Actual, fill = value)) +
+  geom_tile() +
+  geom_text(aes(label = ifelse(value >= 0.1, round(value, 2), "")),
+            color = "white", size = 5)  +
+  scale_fill_gradient(low = "white", high = "black") +
+  labs(x = "Predicted species", y = "Actual species", fill="rho") +
+  theme(panel.background = element_rect(fill = "white"))+
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  geom_vline(xintercept=4.5)+
+  geom_hline(yintercept=4.5)+
+  theme(axis.text = element_text(size=10) )
+
+#Calculate overall accuracy
+sum(diag(cm)) / sum(cm)
+accuracy
+
+#ggsave("Figure7.pdf", plot=last_plot(), width=10, height=7)
+#Additional figure edits were made in Affinity
+```
+
+### Table S5 and S6
+
+```{r}
+####Supplemental table 5: Individual leaf predictions
+all_predictions<- all_predictions %>% dplyr::select(LeafID,ID,Actual,Predicted)
+#write.csv("TableS5.csv")
+
+##### Supplemental table 6: LDA prediction information for each accession
+ 
+Total <- all_predictions %>%
+  group_by(ID) %>%
+  summarise(total_preds = n())
+
+# Count mispredictions per tree
+Mispredict <- all_predictions %>% filter(Actual != Predicted)
+Mispredict_count <- Mispredict %>%
+  group_by(ID) %>%
+  summarise(mispreds = n())
+
+UniquePreds <- all_predictions %>%
+  group_by(ID) %>%
+  summarise(unique_preds = n_distinct(Predicted))
+
+# Merge and calculate misprediction frequency
+Frequency <- Total %>%
+  left_join(Mispredict_count, by = "ID") %>%
+  mutate(
+    mispreds = ifelse(is.na(mispreds), 0, mispreds),
+    mispredict_freq = mispreds / total_preds
+  )
+
+Frequency <- left_join(Frequency, UniquePreds)
+Frequency<- Frequency %>% dplyr::select(ID, total_preds, mispredict_freq, unique_preds)
+#write.csv("TableS6.csv")
+```
